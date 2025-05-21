@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import requests
 import xml.etree.ElementTree as ET
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
@@ -50,6 +51,74 @@ def rzp_lookup():
         "stav": status,
         "zivnosti": zivnosti
     })
+
+
+@app.route("/search", methods=["GET"])
+def search_by_name():
+    jmeno = request.args.get("jmeno", "").strip()
+    prijmeni = request.args.get("prijmeni", "").strip()
+
+    if not jmeno or not prijmeni:
+        return jsonify({"error": "Zadejte jméno i příjmení"}), 400
+
+    params = {
+        "zn_jmeno": jmeno,
+        "zn_prijmeni": prijmeni,
+        "zn_subjekt": "F"
+    }
+
+    res = requests.get("https://www.rzp.cz/cgi-bin/neplatne/licence.cgi", params=params)
+    soup = BeautifulSoup(res.content, "html.parser")
+
+    results = []
+    for row in soup.select("table tr")[1:]:
+        cols = row.find_all("td")
+        if len(cols) >= 5:
+            results.append({
+                "jmeno": cols[0].text.strip(),
+                "ico": cols[1].text.strip(),
+                "mesto": cols[3].text.strip()
+            })
+
+    return jsonify(results)
+
+
+@app.route("/isir", methods=["GET"])
+def isir_lookup():
+    ico = request.args.get("ico", "").strip()
+    prijmeni = request.args.get("prijmeni", "").strip()
+
+    if not ico and not prijmeni:
+        return jsonify({"error": "Zadejte IČO nebo příjmení"}), 400
+
+    url = "https://isir.justice.cz/isir/ueu/vysledky_lustrace_osoba.do"
+    data = {
+        "rcSubjektu": "",
+        "nazevSubjektu": prijmeni if not ico else "",
+        "icoSubjektu": ico,
+        "cisloSenatu": "",
+        "idOsobyKategorie": "0",
+        "idStavRizeni": "0"
+    }
+
+    res = requests.post(url, data=data)
+    soup = BeautifulSoup(res.content, "html.parser")
+
+    rows = soup.select("table.vysledky tr")[1:]
+    results = []
+
+    for row in rows:
+        cols = row.find_all("td")
+        if len(cols) >= 5:
+            results.append({
+                "jmeno": cols[0].text.strip(),
+                "ico": cols[1].text.strip(),
+                "soud": cols[2].text.strip(),
+                "stav": cols[3].text.strip(),
+                "datum": cols[4].text.strip()
+            })
+
+    return jsonify(results)
 
 if __name__ == "__main__":
     app.run(debug=True)
