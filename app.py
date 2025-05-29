@@ -52,7 +52,6 @@ def rzp_lookup():
         "zivnosti": zivnosti
     })
 
-
 @app.route("/search", methods=["GET"])
 def search_by_name():
     jmeno = request.args.get("jmeno", "").strip()
@@ -81,7 +80,6 @@ def search_by_name():
             })
 
     return jsonify(results)
-
 
 @app.route("/isir", methods=["GET"])
 def isir_lookup():
@@ -121,4 +119,4 @@ def isir_lookup():
     return jsonify(results)
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=10000)
