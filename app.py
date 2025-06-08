@@ -1,16 +1,8 @@
-from flask import Flask, request, jsonify
 import requests
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
 
-app = Flask(__name__)
-
-@app.route("/rzp", methods=["GET"])
-def rzp_lookup():
-    ico = request.args.get("ico")
-    if not ico:
-        return jsonify({"error": "Chybí parametr IČO"}), 400
-
+def rzp_lookup(ico):
     soap_request = f"""
         <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
           <soap:Body>
@@ -33,7 +25,7 @@ def rzp_lookup():
     )
 
     if response.status_code != 200:
-        return jsonify({"error": "Chyba při dotazu na RŽP"}), 500
+        return {"error": "Chyba při dotazu na RŽP"}
 
     tree = ET.fromstring(response.content)
 
@@ -43,23 +35,17 @@ def rzp_lookup():
         status = tree.find('.//stav').text
         zivnosti = [elem.text for elem in tree.findall('.//nazev_oboru_cinnosti')]
     except:
-        return jsonify({"error": "Nepodařilo se načíst data"}), 500
+        return {"error": "Nepodařilo se načíst data"}
 
-    return jsonify({
+    return {
         "nazev": name,
         "ico": ico,
         "stav": status,
         "zivnosti": zivnosti
-    })
+    }
 
-@app.route("/search", methods=["GET"])
-def search_by_name():
-    jmeno = request.args.get("jmeno", "").strip()
-    prijmeni = request.args.get("prijmeni", "").strip()
 
-    if not jmeno or not prijmeni:
-        return jsonify({"error": "Zadejte jméno i příjmení"}), 400
-
+def search_by_name(jmeno, prijmeni):
     params = {
         "zn_jmeno": jmeno,
         "zn_prijmeni": prijmeni,
@@ -79,15 +65,12 @@ def search_by_name():
                 "mesto": cols[3].text.strip()
             })
 
-    return jsonify(results)
+    return results
 
-@app.route("/isir", methods=["GET"])
-def isir_lookup():
-    ico = request.args.get("ico", "").strip()
-    prijmeni = request.args.get("prijmeni", "").strip()
 
+def isir_lookup(ico=None, prijmeni=None):
     if not ico and not prijmeni:
-        return jsonify({"error": "Zadejte IČO nebo příjmení"}), 400
+        return {"error": "Zadejte IČO nebo příjmení"}
 
     url = "https://isir.justice.cz/isir/ueu/vysledky_lustrace_osoba.do"
     data = {
@@ -116,7 +99,24 @@ def isir_lookup():
                 "datum": cols[4].text.strip()
             })
 
-    return jsonify(results)
+    return results
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+
+# 💡 Hlavní vstup pro Codex:
+def run(input_data: dict = None):
+    if input_data is None:
+        input_data = {}
+
+    source = input_data.get("source", "rzp")
+    ico = input_data.get("ico", "").strip()
+    jmeno = input_data.get("jmeno", "").strip()
+    prijmeni = input_data.get("prijmeni", "").strip()
+
+    if source == "rzp":
+        return rzp_lookup(ico)
+    elif source == "search":
+        return search_by_name(jmeno, prijmeni)
+    elif source == "isir":
+        return isir_lookup(ico, prijmeni)
+    else:
+        return {"error": f"Neznámý zdroj: {source}"}
