@@ -47,7 +47,6 @@ def rzp_lookup(ico):
         "zivnosti": zivnosti
     }
 
-
 def search_by_name(jmeno, prijmeni):
     params = {
         "zn_jmeno": jmeno,
@@ -70,7 +69,6 @@ def search_by_name(jmeno, prijmeni):
 
     return results
 
-
 def isir_lookup(ico=None, prijmeni=None):
     if not ico and not prijmeni:
         return {"error": "Zadejte IČO nebo příjmení"}
@@ -82,3 +80,54 @@ def isir_lookup(ico=None, prijmeni=None):
         "icoSubjektu": ico,
         "cisloSenatu": "",
         "idOsobyKategorie": "0",
+        "idStavRizeni": "0"
+    }
+
+    res = requests.post(url, data=data)
+    soup = BeautifulSoup(res.content, "html.parser")
+
+    rows = soup.select("table.vysledky tr")[1:]
+    results = []
+
+    for row in rows:
+        cols = row.find_all("td")
+        if len(cols) >= 5:
+            results.append({
+                "jmeno": cols[0].text.strip(),
+                "ico": cols[1].text.strip(),
+                "soud": cols[2].text.strip(),
+                "stav": cols[3].text.strip(),
+                "datum": cols[4].text.strip()
+            })
+
+    return results
+
+def run(input_data: dict = None):
+    if input_data is None:
+        input_data = {}
+
+    source = input_data.get("source", "rzp")
+    ico = input_data.get("ico", "").strip()
+    jmeno = input_data.get("jmeno", "").strip()
+    prijmeni = input_data.get("prijmeni", "").strip()
+
+    if source == "rzp":
+        return rzp_lookup(ico)
+    elif source == "search":
+        return search_by_name(jmeno, prijmeni)
+    elif source == "isir":
+        return isir_lookup(ico, prijmeni)
+    else:
+        return {"error": f"Neznámý zdroj: {source}"}
+
+@app.route("/run", methods=["POST"])
+def handle_run():
+    try:
+        data = request.get_json(force=True)
+        result = run(data)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
